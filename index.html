@@ -278,6 +278,92 @@
       .ex-diagram { width: 110px; min-width: 110px; }
       .profile-stats { grid-template-columns: 1fr 1fr; }
     }
+
+    /* ══════════════════════════════════════════
+       CHAT COACH PANEL
+    ══════════════════════════════════════════ */
+    .chat-fab {
+      position: fixed; bottom: 28px; right: 24px;
+      width: 56px; height: 56px; border-radius: 50%;
+      background: var(--primary); color: white; border: none;
+      font-size: 24px; cursor: pointer; box-shadow: var(--shadow-lg);
+      z-index: 500; display: flex; align-items: center; justify-content: center;
+      transition: all .2s;
+    }
+    .chat-fab:hover { background: var(--primary-hover); transform: scale(1.08); }
+    .chat-fab.open  { background: var(--primary-hover); }
+
+    .chat-panel {
+      position: fixed; bottom: 96px; right: 20px;
+      width: 360px; max-width: calc(100vw - 32px);
+      height: 520px; max-height: calc(100vh - 120px);
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; box-shadow: var(--shadow-lg);
+      z-index: 499; display: none; flex-direction: column; overflow: hidden;
+    }
+    .chat-panel.open { display: flex; animation: fadeIn .2s ease; }
+
+    .chat-header {
+      padding: 14px 16px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--primary); color: white; border-radius: 16px 16px 0 0;
+      flex-shrink: 0;
+    }
+    .chat-header-title { font-size: 14px; font-weight: 700; }
+    .chat-header-sub   { font-size: 11px; opacity: .75; margin-top: 2px; }
+    .chat-close-btn {
+      background: rgba(255,255,255,.2); border: none; color: white;
+      width: 28px; height: 28px; border-radius: 50%; cursor: pointer;
+      font-size: 14px; display: flex; align-items: center; justify-content: center;
+    }
+    .chat-close-btn:hover { background: rgba(255,255,255,.35); }
+
+    .chat-msgs {
+      flex: 1; overflow-y: auto; padding: 14px;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .chat-msg {
+      max-width: 85%; padding: 9px 13px; border-radius: 12px;
+      font-size: 13px; line-height: 1.55; word-break: break-word;
+    }
+    .chat-msg.user { background: var(--primary); color: white; align-self: flex-end; border-radius: 12px 12px 3px 12px; }
+    .chat-msg.ai   { background: var(--surface2); color: var(--text); align-self: flex-start; border-radius: 12px 12px 12px 3px; }
+    .chat-msg.tool { background: var(--green-light); color: #065f46; align-self: flex-start; border-radius: 12px; border: 1px solid var(--green-light); font-size: 12px; }
+    .chat-msg.thinking { background: var(--surface2); color: var(--muted); align-self: flex-start; border-radius: 12px 12px 12px 3px; font-style: italic; }
+
+    .chat-input-row {
+      padding: 12px; border-top: 1px solid var(--border);
+      display: flex; gap: 8px; flex-shrink: 0;
+    }
+    .chat-input-row input {
+      flex: 1; padding: 9px 13px; border: 1.5px solid var(--border);
+      border-radius: 8px; font-size: 13px; outline: none; color: var(--text); background: white;
+    }
+    .chat-input-row input:focus { border-color: var(--primary); }
+    .chat-send {
+      padding: 9px 16px; background: var(--primary); color: white;
+      border: none; border-radius: 8px; font-size: 13px; font-weight: 600;
+      cursor: pointer; white-space: nowrap; transition: background .15s;
+    }
+    .chat-send:hover    { background: var(--primary-hover); }
+    .chat-send:disabled { opacity: .5; cursor: not-allowed; }
+
+    /* AI generating spinner */
+    .ai-generating {
+      display: inline-flex; align-items: center; gap: 8px;
+      color: var(--primary); font-size: 13px; font-weight: 600;
+    }
+    .ai-spinner {
+      width: 16px; height: 16px; border: 2.5px solid var(--primary-light);
+      border-top-color: var(--primary); border-radius: 50%;
+      animation: spin .7s linear infinite; flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 600px) {
+      .chat-panel { right: 8px; left: 8px; width: auto; bottom: 88px; }
+      .chat-fab   { bottom: 20px; right: 16px; }
+    }
   </style>
 </head>
 <body>
@@ -487,12 +573,33 @@
   </div>
 </div>
 
+<!-- ── CHAT COACH ── -->
+<button class="chat-fab" id="chat-fab" onclick="toggleChat()" title="GoalFit Coach">💬</button>
+<div class="chat-panel" id="chat-panel">
+  <div class="chat-header">
+    <div>
+      <div class="chat-header-title">🤖 GoalFit Coach</div>
+      <div class="chat-header-sub">AI-powered fitness guidance</div>
+    </div>
+    <button class="chat-close-btn" onclick="toggleChat()">✕</button>
+  </div>
+  <div class="chat-msgs" id="chat-msgs"></div>
+  <div class="chat-input-row">
+    <input type="text" id="chat-input" placeholder="Ask your coach…" onkeydown="if(event.key==='Enter')sendChat()" />
+    <button class="chat-send" id="chat-send-btn" onclick="sendChat()">Send</button>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <!-- ════════════════════════════════════════
      JAVASCRIPT
 ════════════════════════════════════════ -->
 <script>
+/* ── WORKER CONFIG ── */
+// After deploying the Cloudflare Worker, paste its URL here:
+const WORKER_URL = 'PLACEHOLDER_WORKER_URL';
+
 /* ── DATA ── */
 const DB = {
   getSessions: () => JSON.parse(localStorage.getItem('ff2_sessions') || '[]'),
@@ -721,10 +828,58 @@ function calcSuggestedSets(time, numExercises, goal) {
   return Math.max(2, Math.min(6, perEx));
 }
 
-/* ── GENERATE ── */
-function generateWorkout() {
+/* ── GENERATE (AI-powered with local fallback) ── */
+async function generateWorkout() {
   if (B.muscles.size === 0) { showToast('Select at least one muscle group.'); return; }
   const goal = B.goal || DB.getGoal() || 'maintain';
+
+  // Show loading state on button
+  const genBtn = document.querySelector('#builder-panel .btn-primary');
+  if (genBtn) {
+    genBtn.disabled = true;
+    genBtn.innerHTML = '<span class="ai-spinner"></span> AI Generating…';
+  }
+
+  let aiSuccess = false;
+
+  // Try AI generation if worker is configured
+  if (WORKER_URL && !WORKER_URL.includes('PLACEHOLDER')) {
+    try {
+      const res = await fetch(WORKER_URL + '/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          goal,
+          muscles: [...B.muscles],
+          time: B.time,
+          history: DB.getSessions().slice(0, 5),
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.exercises?.length) {
+          B.exercises = data.exercises.map(e => ({
+            n: e.name, s: e.sets, t: e.tip, m: e.muscles || [],
+          }));
+          const suggested = calcSuggestedSets(B.time, B.exercises.length, goal);
+          B.setCounts = B.exercises.map(() => suggested);
+          aiSuccess = true;
+          showToast('✨ AI-generated workout ready!');
+        }
+      }
+    } catch (err) {
+      console.warn('AI generation failed, using local fallback:', err);
+    }
+  }
+
+  if (!aiSuccess) generateWorkoutLocal(goal);
+
+  if (genBtn) { genBtn.disabled = false; genBtn.innerHTML = '⚡ Generate Workout'; }
+  renderWorkoutOutput(goal);
+}
+
+/* ── LOCAL FALLBACK GENERATOR ── */
+function generateWorkoutLocal(goal) {
   const mArr = [...B.muscles];
   const maxEx = Math.max(3, Math.min(12, Math.floor(B.time / 5)));
   const perMuscle = Math.max(1, Math.floor(maxEx / mArr.length));
@@ -739,13 +894,17 @@ function generateWorkout() {
   if (goal === 'cut' && B.time >= 30 && exs.length < maxEx) {
     exs.push({ ...CARDIO[Math.floor(Math.random() * CARDIO.length)] });
   }
-  B.exercises = exs;
 
-  // Compute suggested sets and initialise stepper state
+  B.exercises = exs;
   const suggested = calcSuggestedSets(B.time, exs.length, goal);
   B.setCounts = exs.map(() => suggested);
+}
 
+/* ── RENDER WORKOUT OUTPUT ── */
+function renderWorkoutOutput(goal) {
   const meta = GOAL_META[goal];
+  const mArr = [...B.muscles];
+
   document.getElementById('workout-meta').innerHTML = `
     <span class="badge ${meta.badge}">${meta.name}</span>
     <span>⏱ <strong>${B.time} min</strong></span>
@@ -753,8 +912,7 @@ function generateWorkout() {
     <span style="color:var(--muted);font-size:12px;">${meta.repNote} &bull; ${meta.restNote}</span>
   `;
 
-  document.getElementById('exercise-list').innerHTML = exs.map((e, i) => {
-    // Split "4×8" → reps = "8", or "3×45s" → reps = "45s"
+  document.getElementById('exercise-list').innerHTML = B.exercises.map((e, i) => {
     const parts = e.s.split('×');
     const reps  = parts.length > 1 ? parts.slice(1).join('×') : e.s;
     return `
@@ -765,10 +923,9 @@ function generateWorkout() {
           <div class="ex-num">${i+1}</div>
           <div class="ex-title">${e.n}</div>
         </div>
-        <!-- Set stepper -->
         <div class="set-stepper-row">
           <button class="set-btn" onclick="adjSets(${i},-1)">−</button>
-          <span class="set-count" id="sc-${i}">${suggested}</span>
+          <span class="set-count" id="sc-${i}">${B.setCounts[i]}</span>
           <button class="set-btn" onclick="adjSets(${i},1)">+</button>
           <span class="set-x-reps">sets &times; ${reps}</span>
           <span class="set-suggested-note">⏱ suggested for ${B.time} min</span>
@@ -1096,6 +1253,131 @@ function showToast(msg) {
   const el=document.getElementById('toast');
   el.textContent=msg; el.classList.add('show');
   clearTimeout(_tt); _tt=setTimeout(()=>el.classList.remove('show'),3000);
+}
+
+/* ════════════════════════════════════════
+   CHAT COACH
+════════════════════════════════════════ */
+const CHAT_MSGS = []; // { role: 'user'|'assistant', content: string }
+let chatOpen = false;
+
+function toggleChat() {
+  chatOpen = !chatOpen;
+  document.getElementById('chat-panel').classList.toggle('open', chatOpen);
+  document.getElementById('chat-fab').classList.toggle('open', chatOpen);
+  if (chatOpen && CHAT_MSGS.length === 0) {
+    pushChatMsg('assistant', "Hey! I'm your GoalFit Coach 💪 Ask me anything — workout tips, form cues, progress, or just tell me how your session went!");
+    setTimeout(() => document.getElementById('chat-input').focus(), 100);
+  }
+}
+
+function pushChatMsg(role, content) {
+  CHAT_MSGS.push({ role, content });
+  renderChat();
+}
+
+function renderChat() {
+  const container = document.getElementById('chat-msgs');
+  container.innerHTML = CHAT_MSGS.map(m => {
+    const cls = m.role === 'user' ? 'user' : m.role === 'tool' ? 'tool' : 'ai';
+    return `<div class="chat-msg ${cls}">${m.content.replace(/\n/g, '<br>')}</div>`;
+  }).join('');
+  container.scrollTop = container.scrollHeight;
+}
+
+async function sendChat() {
+  const input = document.getElementById('chat-input');
+  const text  = input.value.trim();
+  if (!text) return;
+
+  input.value = '';
+  pushChatMsg('user', text);
+
+  const sendBtn = document.getElementById('chat-send-btn');
+  sendBtn.disabled = true;
+
+  // Show thinking bubble
+  const container = document.getElementById('chat-msgs');
+  const thinking  = document.createElement('div');
+  thinking.className = 'chat-msg thinking';
+  thinking.id = 'chat-thinking';
+  thinking.textContent = '…';
+  container.appendChild(thinking);
+  container.scrollTop = container.scrollHeight;
+
+  // Not yet configured
+  if (!WORKER_URL || WORKER_URL.includes('PLACEHOLDER')) {
+    thinking.remove();
+    pushChatMsg('assistant', "I'm not connected yet! Once the Cloudflare Worker is deployed and the URL is set, I'll be fully live. For now, build workouts in the Goals tab 💪");
+    sendBtn.disabled = false;
+    return;
+  }
+
+  try {
+    const context = {
+      goal: DB.getGoal(),
+      history: DB.getSessions().slice(0, 10),
+      currentWorkout: B.exercises.length
+        ? { exercises: B.exercises.map(e => ({ n: e.n, m: e.m })), goal: B.goal, time: B.time }
+        : null,
+    };
+
+    // Build message array for API (exclude the greeting)
+    const apiMessages = CHAT_MSGS
+      .filter(m => !(m.role === 'assistant' && m.content.startsWith("Hey! I'm your GoalFit Coach")))
+      .map(m => ({ role: m.role === 'tool' ? 'assistant' : m.role, content: m.content }));
+
+    const res = await fetch(WORKER_URL + '/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: apiMessages, context }),
+    });
+
+    const data = await res.json();
+    thinking.remove();
+
+    if (data.toolCall) {
+      handleChatToolCall(data.toolCall, data.reply);
+    } else {
+      pushChatMsg('assistant', data.reply || 'Sorry, something went wrong — try again!');
+    }
+  } catch (err) {
+    thinking.remove();
+    pushChatMsg('assistant', 'Connection issue — check your network and try again.');
+    console.error('Chat error:', err);
+  }
+
+  sendBtn.disabled = false;
+}
+
+function handleChatToolCall(toolCall, preText) {
+  if (preText) pushChatMsg('assistant', preText);
+
+  if (toolCall.name === 'log_session') {
+    if (B.exercises.length) {
+      // Pre-fill save modal with AI-suggested name
+      document.getElementById('save-name').value = toolCall.input.session_name || '';
+      document.getElementById('save-modal').classList.add('open');
+      pushChatMsg('tool', `📋 Opening save dialog: "${toolCall.input.session_name}" — confirm to log it!\n${toolCall.input.summary || ''}`);
+    } else {
+      pushChatMsg('assistant', "You don't have an active workout to log yet. Build one in the Goals tab first!");
+    }
+  } else if (toolCall.name === 'get_weekly_summary') {
+    const sessions = DB.getSessions();
+    const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 7);
+    const week = sessions.filter(s => new Date(s.date) >= cutoff);
+
+    let summaryText;
+    if (!week.length) {
+      summaryText = 'No workouts logged this week yet.';
+    } else {
+      const totalMin  = week.reduce((a, s) => a + s.time, 0);
+      const muscles   = [...new Set(week.flatMap(s => s.muscles))];
+      summaryText = `${week.length} session${week.length > 1 ? 's' : ''} this week, ${totalMin} min total. Muscles trained: ${muscles.join(', ')}.`;
+    }
+
+    pushChatMsg('tool', `📊 ${summaryText}`);
+  }
 }
 
 /* ── INIT ── */
